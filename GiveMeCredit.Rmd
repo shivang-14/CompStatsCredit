@@ -1,0 +1,68 @@
+---
+title: "Comp Stats | Give Me Some Credit"
+author: "Lathan Liou, Shivang Mehta, Isaac Cui, Abby Lewis"
+date: "11/21/2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+#### Libraries ####
+library(readxl)
+library(tidyr)
+library(VIM)
+library(readr)
+cs_training <- read_csv("~/Desktop/Senior Year/CompStats/Chandler/DataProject/cs-training.csv")
+
+#### Data Preparation ####
+#remove first column
+cs_training <- cs_training[,-1]
+
+#making all columns numeric
+cs_training <- sapply(cs_training, as.numeric)
+```
+
+## Section 1: Data Imputation 
+
+```{r}
+md.pattern(cs_training)
+aggr_plot <- aggr(cs_training, col=c('dodgerblue','black'), numbers=TRUE, sortVars=TRUE, labels=names(cs_training), cex.axis=.4, gap=0.5, ylab=c("Histogram of missing data","Pattern"))
+```
+
+# Imputing NumberOfDependents as median
+
+```{r}
+median.numdep <- median(cs_training$NumberOfDependents, na.rm = TRUE)
+for(i in 1:length(cs_training$NumberOfDependents)){
+  if(is.na(cs_training$NumberOfDependents[i])){
+    cs_training$NumberOfDependents[i] = median.numdep
+  }
+}
+```
+
+# Imputing MonthlyIncome
+
+```{r}
+train1 <- cs_training
+train1 <- train1 %>% drop_na()
+train.y <- train1$MonthlyIncome
+train1 <- subset(train1, select = -c(MonthlyIncome, SeriousDlqin2yrs, X__1))
+```
+
+# Regression
+
+```{r}
+fit <- lm(train.y ~., data=train1)
+pred.miss <- fit$coefficients[1] + fit$coefficients[2]*cs_training$RevolvingUtilizationOfUnsecuredLines + fit$coefficients[3]*cs_training$age +
+              fit$coefficients[4]*cs_training$`NumberOfTime30-59DaysPastDueNotWorse` + fit$coefficients[5]*cs_training$DebtRatio +
+              fit$coefficients[6]*cs_training$NumberOfOpenCreditLinesAndLoans + fit$coefficients[7]*cs_training$NumberOfTimes90DaysLate +
+              fit$coefficients[8]*cs_training$NumberOfOpenCreditLinesAndLoans + fit$coefficients[9]*cs_training$`NumberOfTime60-89DaysPastDueNotWorse` +
+              fit$coefficients[10]*cs_training$NumberOfDependents
+
+for(i in 1:length(cs_training$MonthlyIncome)){
+  if(is.na(cs_training$MonthlyIncome[i])){
+    cs_training$MonthlyIncome[i] = pred.miss[i]
+  }
+}
+```
