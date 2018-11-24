@@ -13,6 +13,8 @@ library(readxl)
 library(tidyr)
 library(VIM)
 library(readr)
+library(dplyr)
+library(skimr)
 cs_training <- read_csv("~/Desktop/Senior Year/CompStats/Chandler/DataProject/cs-training.csv")
 
 #### Data Preparation ####
@@ -21,14 +23,19 @@ cs_training <- cs_training[,-1]
 
 #making all columns numeric
 cs_training <- sapply(cs_training, as.numeric)
+
+cs_training <- as.data.frame(cs_training)
 ```
 
 ## Section 1: Data Imputation 
 
 ```{r}
+#EDA
 md.pattern(cs_training)
 aggr_plot <- aggr(cs_training, col=c('dodgerblue','black'), numbers=TRUE, sortVars=TRUE, labels=names(cs_training), cex.axis=.4, gap=0.5, ylab=c("Histogram of missing data","Pattern"))
 ```
+
+Write some observations.
 
 # Imputing NumberOfDependents as median
 
@@ -47,7 +54,7 @@ for(i in 1:length(cs_training$NumberOfDependents)){
 train1 <- cs_training
 train1 <- train1 %>% drop_na()
 train.y <- train1$MonthlyIncome
-train1 <- subset(train1, select = -c(MonthlyIncome, SeriousDlqin2yrs, X__1))
+train1 <- subset(train1, select = -c(MonthlyIncome, SeriousDlqin2yrs))
 ```
 
 # Regression
@@ -65,4 +72,29 @@ for(i in 1:length(cs_training$MonthlyIncome)){
     cs_training$MonthlyIncome[i] = pred.miss[i]
   }
 }
+```
+
+Maybe write a brief description of what the code did.
+
+## Section 2: Feature Engineering
+
+In class, we learned how adding basis functions could improve the way we understand our data: namely finding our decision rules in higher dimensions. Thus, feature engineering is a crucial part of the machine learning process. By transforming our data into features that we think better represent the underlying problem for our machine learning models, we hope to improve predictive performance. We tried to use our domain knowledge about credit scores and our creativity to come up with new features. We ultimately came up with 15 new features in addition to the existing 11 explanatory ones in the data set. 
+
+```{r}
+cs_training <- cs_training %>%
+  mutate(Distributedincome = MonthlyIncome/NumberOfDependents,
+         Totalcost = DebtRatio * MonthlyIncome,
+         Retired = ifelse(age > 65, 1, 0),
+         Delayratio = (`NumberOfTime30-59DaysPastDueNotWorse`+`NumberOfTime60-89DaysPastDueNotWorse`)/NumberOfTimes90DaysLate,
+         Loansdep = (NumberOfOpenCreditLinesAndLoans + NumberRealEstateLoansOrLines)/NumberOfDependents,
+         Lateindex = `NumberOfTime30-59DaysPastDueNotWorse` + 2*`NumberOfTime60-89DaysPastDueNotWorse` + 3*NumberOfTimes90DaysLate,
+         Numedepencubed = NumberOfDependents^3,
+         LogRUUL = log(RevolvingUtilizationOfUnsecuredLines),
+         LogMI = log(MonthlyIncome),
+         LoansAge = (NumberOfOpenCreditLinesAndLoans + NumberRealEstateLoansOrLines)/age,
+         LoansLate = Lateindex/(NumberOfOpenCreditLinesAndLoans + NumberRealEstateLoansOrLines),
+         RUULlate = Lateindex/RevolvingUtilizationOfUnsecuredLines,
+         DepAge = NumberOfDependents/age,
+         LoansIncome = NumberOfOpenCreditLinesAndLoans + NumberRealEstateLoansOrLines
+  )
 ```
