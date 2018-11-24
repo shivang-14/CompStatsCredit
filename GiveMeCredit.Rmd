@@ -81,6 +81,7 @@ Maybe write a brief description of what the code did.
 In class, we learned how adding basis functions could improve the way we understand our data: namely finding our decision rules in higher dimensions. Thus, feature engineering is a crucial part of the machine learning process. By transforming our data into features that we think better represent the underlying problem for our machine learning models, we hope to improve predictive performance. We tried to use our domain knowledge about credit scores and our creativity to come up with new features. We ultimately came up with 15 new features in addition to the existing 11 explanatory ones in the data set. 
 
 ```{r}
+#add features
 cs_training <- cs_training %>%
   mutate(Distributedincome = MonthlyIncome/NumberOfDependents,
          Totalcost = DebtRatio * MonthlyIncome,
@@ -97,4 +98,7 @@ cs_training <- cs_training %>%
          DepAge = NumberOfDependents/age,
          LoansIncome = NumberOfOpenCreditLinesAndLoans + NumberRealEstateLoansOrLines
   )
+
+#save dataset
+write_csv(cs_training, "cs_training_final.csv")
 ```
