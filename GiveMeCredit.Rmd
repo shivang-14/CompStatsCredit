@@ -116,4 +116,5 @@ write_csv(cs_training, "cs_training_final.csv")
 ```{r}
 xmat <- as.matrix(cs_training[,-1])
 lassovar <- glmnet(xmat, y=as.factor(cs_training$SeriousDlqin2yrs), alpha=1, family="binomial")
+coef(lassovar)[, 10]
 ```
