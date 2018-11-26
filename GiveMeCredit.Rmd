@@ -16,6 +16,7 @@ library(readr)
 library(dplyr)
 library(skimr)
 library(glmnet)
+library(ggplot2)
 
 cs_training <- read_csv("~/Desktop/Senior Year/CompStats/Chandler/DataProject/cs-training.csv")
 
@@ -148,10 +149,6 @@ Maybe write a brief description of what the code did.
 In class, we learned how adding basis functions could improve the way we understand our data: namely finding our decision rules in higher dimensions. Thus, feature engineering is a crucial part of the machine learning process. By transforming our data into features that we think better represent the underlying problem for our machine learning models, we hope to improve predictive performance. We tried to use our domain knowledge about credit scores and our creativity to come up with new features. We ultimately came up with 14 new features in addition to the existing 10 explanatory ones in the data set. 
 
 ```{r}
-#### remove data that doesn't make sense ####
-
-
-
 #add features
 cs_training <- cs_training %>%
   mutate(Distributedincome = MonthlyIncome/(1+NumberOfDependents)-1,
@@ -163,23 +160,25 @@ cs_training <- cs_training %>%
          LogMI = ifelse(MonthlyIncome == 0, 0, log(MonthlyIncome)),
          LoansAge = (NumberOfOpenCreditLinesAndLoans + NumberRealEstateLoansOrLines)/age,
          DepAge = NumberOfDependents/age,
-         LoansIncome = NumberOfOpenCreditLinesAndLoans + NumberRealEstateLoansOrLines, 
-         Agesq = age^2,
-         Agecub = age^3
+         LoansIncome = NumberOfOpenCreditLinesAndLoans + NumberRealEstateLoansOrLines,
+         RUULIncome = log(RevolvingUtilizationOfUnsecuredLines/MonthlyIncome), #Housing Insolvency paper
+         HousingExpenses = log(NumberRealEstateLoansOrLines/MonthlyIncome),
+         AgeCubed = age^3,
+         LogAge = log(age)
 )
 ```
 
 ```{r}
-#save dataset
-write_csv(cs_training, "cs_training_final.csv")
+#Test features
+cs_zero <- cs_training[cs_training$SeriousDlqin2yrs == 0,]
+cs_one <- cs_training[cs_training$SeriousDlqin2yrs == 1,]
+hist(log(cs_zero$RevolvingUtilizationOfUnsecuredLines/(cs_zero$MonthlyIncome)), freq=FALSE)
+hist(log(cs_zero$RevolvingUtilizationOfUnsecuredLines/(cs_zero$MonthlyIncome)), freq=FALSE)
+
+summary(cs_training$HousingExpenses)
+
+ggplot(cs_training, aes(LogAge, fill = as.factor(SeriousDlqin2yrs))) + geom_density(alpha = 0.2)
 ```
-
-```{r}
-#to make it easier, load in cleaned dataset
-cs_training_final <- read_csv("~/Desktop/Senior Year/CompStats/Chandler/DataProject/cs-training_final.csv")
-```
-
-
 
 ## Section 4: Feature Selection
 
