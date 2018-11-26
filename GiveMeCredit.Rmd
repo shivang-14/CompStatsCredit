@@ -16,6 +16,7 @@ library(readr)
 library(dplyr)
 library(skimr)
 library(glmnet)
+
 cs_training <- read_csv("~/Desktop/Senior Year/CompStats/Chandler/DataProject/cs-training.csv")
 
 #### Data Preparation ####
@@ -75,6 +76,71 @@ for(i in 1:length(cs_training$MonthlyIncome)){
 }
 ```
 
+## Section 2: Outlier Treatment
+We decided to take the outliers and replace them with the median. We chose not to remove the outliers because we didn't want to lose information. Although we are reducing the variance, we hope to remove influential points that could be skewing our data.
+
+```{r}
+#compute medians
+medians <- sapply(cs_training, median)
+quantiles <- sapply(cs_training, quantile, probs = 0.95)
+
+#median replacement
+for(i in 1:length(cs_training$SeriousDlqin2yrs)){
+  
+  if(cs_training$RevolvingUtilizationOfUnsecuredLines[i] > quantiles[2]){
+    
+  cs_training$RevolvingUtilizationOfUnsecuredLines[i] <- medians[2]
+  }
+
+if(cs_training$age[i] > quantiles[3] | cs_training$age[i] == 0 ){
+    
+  cs_training$age[i] <- medians[3]
+}
+
+  if(cs_training$`NumberOfTime30-59DaysPastDueNotWorse`[i] == 96 | cs_training$`NumberOfTime30-59DaysPastDueNotWorse`[i] == 98){
+    
+  cs_training$`NumberOfTime30-59DaysPastDueNotWorse`[i] <- medians[4]
+  }
+  
+  if(cs_training$DebtRatio[i] > quantiles[5]) {
+    
+  cs_training$DebtRatio[i] <- medians[5]
+  }
+  
+  if(cs_training$MonthlyIncome[i] > quantiles[6]){
+    
+  cs_training$MonthlyIncome[i] <- medians[6]
+  }
+  
+  if(cs_training$NumberOfOpenCreditLinesAndLoans[i] > quantiles[7]){
+    
+    cs_training$NumberOfOpenCreditLinesAndLoans[i] <- medians[7]
+  }
+  
+  if(cs_training$NumberOfTimes90DaysLate[i] == 96 | cs_training$NumberOfTimes90DaysLate[i] == 98){
+    
+  cs_training$NumberOfTimes90DaysLate[i] <- medians[8]
+  }
+  
+  if(cs_training$NumberRealEstateLoansOrLines[i] > quantiles[9]){
+    
+    cs_training$NumberRealEstateLoansOrLines[i] <- medians[9]
+  }
+  
+   if(cs_training$`NumberOfTime60-89DaysPastDueNotWorse`[i] == 96 | cs_training$`NumberOfTime60-89DaysPastDueNotWorse`[i] == 98){
+    
+  cs_training$`NumberOfTime60-89DaysPastDueNotWorse`[i] <- medians[10]
+   }
+  
+   if(cs_training$NumberOfDependents[i] > quantiles[11]){
+    
+    cs_training$NumberOfDependents[i] <- medians[11]
+  }
+}
+
+
+```
+
 Maybe write a brief description of what the code did.
 
 ## Section 2: Feature Engineering
@@ -84,12 +150,7 @@ In class, we learned how adding basis functions could improve the way we underst
 ```{r}
 #### remove data that doesn't make sense ####
 
-# age of 0 doesn't make sense
-cs_training <- cs_training %>%
-  filter(age != 0)
 
-# negative monthly income? maybe that's a typo 
-cs_training$MonthlyIncome <- abs(cs_training$MonthlyIncome)
 
 #add features
 cs_training <- cs_training %>%
@@ -102,7 +163,9 @@ cs_training <- cs_training %>%
          LogMI = ifelse(MonthlyIncome == 0, 0, log(MonthlyIncome)),
          LoansAge = (NumberOfOpenCreditLinesAndLoans + NumberRealEstateLoansOrLines)/age,
          DepAge = NumberOfDependents/age,
-         LoansIncome = NumberOfOpenCreditLinesAndLoans + NumberRealEstateLoansOrLines
+         LoansIncome = NumberOfOpenCreditLinesAndLoans + NumberRealEstateLoansOrLines, 
+         Agesq = age^2,
+         Agecub = age^3
 )
 ```
 
@@ -111,10 +174,18 @@ cs_training <- cs_training %>%
 write_csv(cs_training, "cs_training_final.csv")
 ```
 
-## Section 3: Feature Selection
+```{r}
+#to make it easier, load in cleaned dataset
+cs_training_final <- read_csv("~/Desktop/Senior Year/CompStats/Chandler/DataProject/cs-training_final.csv")
+```
+
+
+
+## Section 4: Feature Selection
 
 ```{r}
 xmat <- as.matrix(cs_training[,-1])
 lassovar <- glmnet(xmat, y=as.factor(cs_training$SeriousDlqin2yrs), alpha=1, family="binomial")
 coef(lassovar)[, 10]
 ```
+
