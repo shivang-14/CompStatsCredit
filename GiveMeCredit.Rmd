@@ -141,7 +141,7 @@ if(cs_training$age[i] > quantiles[3] | cs_training$age[i] == 0 ){
 }
 
 # absolute value of monthly income
-cs_training$MonthlyIncome <- abs(cs_training$MonthlyIncome)
+cs_training$MonthlyIncome <- ifelse(cs_training$MonthlyIncome < 0, 0, cs_training$MonthlyIncome)
 ```
 
 ```{r, include=FALSE}
