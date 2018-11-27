@@ -158,7 +158,7 @@ cs_training_clean <- read_csv("cs_training_clean.csv")
 
 #add features
 cs_training_clean <- cs_training_clean %>%
-  mutate(Distributedincome = MonthlyIncome/(1+NumberOfDependents)-1,
+  mutate(Distributedincome = MonthlyIncome/(1+NumberOfDependents),
          Totalcost = DebtRatio * MonthlyIncome,
          Retired = ifelse(age > 65, 1, 0),
          Lateindex = `NumberOfTime30-59DaysPastDueNotWorse` + 2*`NumberOfTime60-89DaysPastDueNotWorse` + 3*NumberOfTimes90DaysLate,
