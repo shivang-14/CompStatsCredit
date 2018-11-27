@@ -17,6 +17,7 @@ library(dplyr)
 library(skimr)
 library(glmnet)
 library(ggplot2)
+library(mice)
 
 cs_training <- read_csv("~/Desktop/Senior Year/CompStats/Chandler/DataProject/cs-training.csv")
 
@@ -139,9 +140,13 @@ if(cs_training$age[i] > quantiles[3] | cs_training$age[i] == 0 ){
   }
 }
 
-
+# absolute value of monthly income
+cs_training$MonthlyIncome <- abs(cs_training$MonthlyIncome)
 ```
 
+```{r, include=FALSE}
+write_csv(cs_training, "cs_training_clean.csv")
+```
 Maybe write a brief description of what the code did.
 
 ## Section 2: Feature Engineering
@@ -149,8 +154,10 @@ Maybe write a brief description of what the code did.
 In class, we learned how adding basis functions could improve the way we understand our data: namely finding our decision rules in higher dimensions. Thus, feature engineering is a crucial part of the machine learning process. By transforming our data into features that we think better represent the underlying problem for our machine learning models, we hope to improve predictive performance. We tried to use our domain knowledge about credit scores and our creativity to come up with new features. We ultimately came up with 14 new features in addition to the existing 10 explanatory ones in the data set. 
 
 ```{r}
+cs_training_clean <- read_csv("cs_training_clean.csv")
+
 #add features
-cs_training <- cs_training %>%
+cs_training_clean <- cs_training_clean %>%
   mutate(Distributedincome = MonthlyIncome/(1+NumberOfDependents)-1,
          Totalcost = DebtRatio * MonthlyIncome,
          Retired = ifelse(age > 65, 1, 0),
