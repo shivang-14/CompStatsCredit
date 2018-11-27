@@ -163,13 +163,13 @@ cs_training_clean <- cs_training_clean %>%
          Retired = ifelse(age > 65, 1, 0),
          Lateindex = `NumberOfTime30-59DaysPastDueNotWorse` + 2*`NumberOfTime60-89DaysPastDueNotWorse` + 3*NumberOfTimes90DaysLate,
          Numedepencubed = NumberOfDependents^3,
-         LogRUUL = ifelse(RevolvingUtilizationOfUnsecuredLines == 0, 0, log(RevolvingUtilizationOfUnsecuredLines)),
-         LogMI = ifelse(MonthlyIncome == 0, 0, log(MonthlyIncome)),
+         LogRUUL = log(RevolvingUtilizationOfUnsecuredLines+1),
+         LogMI = log(MonthlyIncome+1),
          LoansAge = (NumberOfOpenCreditLinesAndLoans + NumberRealEstateLoansOrLines)/age,
          DepAge = NumberOfDependents/age,
          LoansIncome = NumberOfOpenCreditLinesAndLoans + NumberRealEstateLoansOrLines,
-         RUULIncome = log(RevolvingUtilizationOfUnsecuredLines/MonthlyIncome), #Housing Insolvency paper
-         HousingExpenses = log(NumberRealEstateLoansOrLines/MonthlyIncome),
+         RUULIncome = log(RevolvingUtilizationOfUnsecuredLines/(MonthlyIncome+1)), #Housing Insolvency paper
+         HousingExpenses = log(NumberRealEstateLoansOrLines/(MonthlyIncome+1)),
          AgeCubed = age^3,
          LogAge = log(age)
 )
