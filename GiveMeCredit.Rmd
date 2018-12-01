@@ -1,0 +1,188 @@
+---
+title: "Comp Stats | Give Me Some Credit"
+author: "Lathan Liou, Shivang Mehta, Isaac Cui, Abby Lewis"
+date: "11/30/2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE message = FALSE}
+## Section 0: Environment Setup
+
+knitr::opts_chunk$set(echo = TRUE)
+#### Libraries ####
+library(readxl)
+library(tidyr)
+library(VIM)
+library(readr)
+library(dplyr)
+library(glmnet)
+library(ggplot2)
+library(mice)
+library(scales)
+library(DescTools)
+library(randomForest)
+library(pROC)
+
+
+cs_training <- read_csv("C:/Users/Shivang Mehta/Desktop/Work/Fall 18/Computational Statistics/Project/Data/cs-training.xlsx")
+
+#### Data Preparation ####
+#remove first column
+cs_training <- cs_training[,-1]
+
+#making all columns numeric
+cs_training <- as.data.frame(cs_training)
+```
+\par 
+Banks play a crucial role in market economies. They decide who can get finance and on what terms and can make or break investment decisions. For markets and society to function, individuals and companies need access to credit. 
+\par 
+Credit scoring algorithms, which make a guess at the probability of default, are the method banks use to determine whether or not a loan should be granted. Through this project, we attempt to improve on the state of the art in credit scoring, by predicting the probability that somebody will experience financial distress in the next two years.
+\par 
+We begin by exploring the data provided to us:
+\par 
+```{r}
+## Section 1: Data Exploration
+
+# Dependent variable 
+ggplot(cs_training, aes(SeriousDlqin2yrs)) + geom_bar(aes(y= (..count..)/sum(..count..)), fill = "steelblue", color ="steelblue") + ylab("Percent")
+
+# Independent Variables
+
+a1 <- ggplot(cs_training, aes(RevolvingUtilizationOfUnsecuredLines)) + geom_bar(aes(y= (..count..)/sum(..count..)), fill = "steelblue", color ="steelblue") + ylab("Percent")
+a2 <- ggplot(cs_training, aes(age)) + geom_bar(fill = "steelblue", color ="steelblue")
+a3 <- ggplot(cs_training, aes(`NumberOfTime30-59DaysPastDueNotWorse`)) + geom_bar(aes(y= (..count..)/sum(..count..)), fill = "steelblue", color ="steelblue") + ylab("Percent")
+a4 <- ggplot(cs_training, aes(DebtRatio)) + geom_bar(fill = "steelblue", color ="steelblue") + ylab("Percent")
+
+a5 <- ggplot(cs_training, aes(MonthlyIncome)) + geom_bar(fill = "steelblue", color ="steelblue") + ylab("Percent")
+a6 <- ggplot(cs_training, aes(NumberOfOpenCreditLinesAndLoans)) + geom_bar(fill = "steelblue", color ="steelblue") + ylab("Percent")
+a7 <- ggplot(cs_training, aes(`NumberOfTimes90DaysLate`)) + geom_bar(aes(y= (..count..)/sum(..count..)), fill = "steelblue", color ="steelblue") + ylab("Percent")
+a8 <- ggplot(cs_training, aes(NumberRealEstateLoansOrLines)) + geom_bar(aes(y= (..count..)/sum(..count..)), fill = "steelblue", color ="steelblue") + ylab("Percent")
+
+a9 <- ggplot(cs_training, aes(NumberOfDependents)) + geom_bar(aes(y= (..count..)/sum(..count..)), fill = "steelblue", color ="steelblue") + ylab("Percent")
+a10 <- ggplot(cs_training, aes(`NumberOfTime60-89DaysPastDueNotWorse`)) + geom_bar(aes(y= (..count..)/sum(..count..)), fill = "steelblue", color ="steelblue") + ylab("Percent")
+```
+
+
+
+
+```{r}
+## Section 2: Data Imputation
+
+#EDA
+md.pattern(cs_training)
+aggr_plot <- aggr(cs_training, col=c('dodgerblue','black'), numbers=TRUE, sortVars=TRUE, labels=names(cs_training), cex.axis=.4, gap=0.5, ylab=c("Histogram of missing data","Pattern"))
+```
+
+Write some observations.
+
+# Imputing NumberOfDependents as median
+
+```{r}
+median.numdep <- median(cs_training$NumberOfDependents, na.rm = TRUE)
+for(i in 1:length(cs_training$NumberOfDependents)){
+  if(is.na(cs_training$NumberOfDependents[i])){
+    cs_training$NumberOfDependents[i] = median.numdep
+  }
+}
+```
+
+# Imputing MonthlyIncome
+
+```{r}
+train1 <- cs_training
+train1 <- train1 %>% drop_na()
+train.y <- train1$MonthlyIncome
+train1 <- subset(train1, select = -c(MonthlyIncome, SeriousDlqin2yrs))
+```
+
+# Regression
+
+```{r}
+fit <- lm(train.y ~., data=train1)
+pred.miss <- fit$coefficients[1] + fit$coefficients[2]*cs_training$RevolvingUtilizationOfUnsecuredLines + fit$coefficients[3]*cs_training$age +
+              fit$coefficients[4]*cs_training$`NumberOfTime30-59DaysPastDueNotWorse` + fit$coefficients[5]*cs_training$DebtRatio +
+              fit$coefficients[6]*cs_training$NumberOfOpenCreditLinesAndLoans + fit$coefficients[7]*cs_training$NumberOfTimes90DaysLate +
+              fit$coefficients[8]*cs_training$NumberOfOpenCreditLinesAndLoans + fit$coefficients[9]*cs_training$`NumberOfTime60-89DaysPastDueNotWorse` +
+              fit$coefficients[10]*cs_training$NumberOfDependents
+for(i in 1:length(cs_training$MonthlyIncome)){
+  if(is.na(cs_training$MonthlyIncome[i])){
+    cs_training$MonthlyIncome[i] = pred.miss[i]
+  }
+}
+
+
+## Random forests 
+```
+
+## Section 3: Outlier Treatment
+
+SHORT NOTE ON WINSORIZATION
+
+```{r}
+## Winsorize Data 
+cs_training_winsorized <- sapply(cs_training, Winsorize, minval = NULL)
+cs_training_winsorized <- as.data.frame(cs_training_winsorized)
+```
+
+```{r, include=FALSE}
+write_csv(cs_training_winsorized, "cs_training_clean.csv")
+```
+Maybe write a brief description of what the code did.
+
+## Section 4: Feature Engineering
+
+In class, we learned how adding basis functions could improve the way we understand our data: namely finding our decision rules in higher dimensions. Thus, feature engineering is a crucial part of the machine learning process. By transforming our data into features that we think better represent the underlying problem for our machine learning models, we hope to improve predictive performance. We tried to use our domain knowledge about credit scores and our creativity to come up with new features. We ultimately came up with 14 new features in addition to the existing 10 explanatory ones in the data set. 
+
+```{r}
+cs_training_clean <- read_csv("cs_training_clean.csv")
+#add features
+cs_training_clean <- cs_training_clean %>%
+  mutate(Distributedincome = MonthlyIncome/(1+NumberOfDependents),
+         Totalcost = DebtRatio * MonthlyIncome,
+         Retired = ifelse(age > 65, 1, 0),
+         Lateindex = `NumberOfTime30-59DaysPastDueNotWorse` + 2*`NumberOfTime60-89DaysPastDueNotWorse` + 3*NumberOfTimes90DaysLate,
+         Numedepencubed = NumberOfDependents^3,
+         LogRUUL = log(RevolvingUtilizationOfUnsecuredLines+1),
+         LogMI = log(MonthlyIncome+1),
+         LoansAge = (NumberOfOpenCreditLinesAndLoans + NumberRealEstateLoansOrLines)/age,
+         DepAge = NumberOfDependents/age,
+         LoansIncome = NumberOfOpenCreditLinesAndLoans + NumberRealEstateLoansOrLines,
+         RUULIncome = log((RevolvingUtilizationOfUnsecuredLines+1)/(MonthlyIncome+1)), #Housing Insolvency paper
+         HousingExpenses = log((1+NumberRealEstateLoansOrLines)/(MonthlyIncome+1)),
+         AgeCubed = age^3,
+         LogAge = log(age)
+)
+```
+
+```{r}
+ggplot(cs_training_clean, aes(LogAge, fill = as.factor(SeriousDlqin2yrs))) + geom_density(alpha = 0.2)
+```
+
+## Section 5: Feature Selection
+
+```{r}
+xmat <- as.matrix(cs_training_clean[,-1])
+lassovar <- cv.glmnet(xmat, y=as.factor(cs_training_clean$SeriousDlqin2yrs), alpha = 0.5, lambda = seq(0.00051,0.00058,length.out=7),family="binomial")
+
+```
+
+## Section 6: Predictive Algorithm
+
+```{r}
+
+output.forest<- randomForest(as.factor(cs_training_clean$SeriousDlqin2yrs) ~ cs_training_clean$RevolvingUtilizationOfUnsecuredLines+ cs_training_clean$age+ cs_training_clean$`NumberOfTime30-59DaysPastDueNotWorse`+ cs_training_clean$DebtRatio + cs_training_clean$MonthlyIncome + cs_training_clean$NumberOfOpenCreditLinesAndLoans + cs_training_clean$NumberOfTimes90DaysLate + cs_training_clean$NumberRealEstateLoansOrLines + cs_training_clean$`NumberOfTime60-89DaysPastDueNotWorse` + cs_training_clean$NumberOfDependents + cs_training_clean$Distributedincome + cs_training_clean$Totalcost + cs_training_clean$Retired + cs_training_clean$Lateindex + cs_training_clean$Numedepencubed + cs_training_clean$LogRUUL + cs_training_clean$LogMI + cs_training_clean$LoansAge +cs_training_clean$DepAge + cs_training_clean$LoansIncome + cs_training_clean$RUULIncome + cs_training_clean$HousingExpenses + cs_training_clean$AgeCubed + cs_training_clean$LogAge , 
+                             data=cs_training_clean, ntree=100, importance=T, replace=T)
+
+
+pred <- predict(output.forest, cs_training_clean, type = "prob")
+library(pROC)
+roc_obj <- roc(cs_training_clean$SeriousDlqin2yrs, pred[,2])
+auc(roc_obj)
+
+
+```
+
+
+
+
+
