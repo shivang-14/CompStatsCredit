@@ -178,11 +178,4 @@ pred <- predict(output.forest, cs_training_clean, type = "prob")
 library(pROC)
 roc_obj <- roc(cs_training_clean$SeriousDlqin2yrs, pred[,2])
 auc(roc_obj)
-
-
 ```
-
-
-
-
-
