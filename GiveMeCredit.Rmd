@@ -73,7 +73,7 @@ md.pattern(cs_training)
 aggr_plot <- aggr(cs_training, col=c('dodgerblue','black'), numbers=TRUE, sortVars=TRUE, labels=names(cs_training), cex.axis=.4, gap=0.5, ylab=c("Histogram of missing data","Pattern"))
 ```
 
-Write some observations.
+NOTE ON USE OF MEDIAN FOR IMPUTATION AND REGRESSION.
 
 # Imputing NumberOfDependents as median
 
@@ -161,21 +161,93 @@ ggplot(cs_training_clean, aes(LogAge, fill = as.factor(SeriousDlqin2yrs))) + geo
 ## Section 5: Feature Selection
 
 ```{r}
-xmat <- as.matrix(cs_training_clean[,-1])
-lassovar <- cv.glmnet(xmat, y=as.factor(cs_training_clean$SeriousDlqin2yrs), alpha = 0.5, lambda = seq(0.00051,0.00058,length.out=7),family="binomial")
+#xmat <- as.matrix(cs_training_clean[,-1])
+#lassovar <- cv.glmnet(xmat, y=as.factor(cs_training_clean$SeriousDlqin2yrs), alpha = 0.5, lambda = seq(0.00051,0.00058,length.out=7),family="binomial")
 
 ```
 
-## Section 6: Predictive Algorithm
+## Section 6: Loading Test Data 
+
+```{r}
+
+cs_test <- cs_test[,-1]
+
+# Imputation
+median.numdep <- median(cs_test$NumberOfDependents, na.rm = TRUE)
+for(i in 1:length(cs_test$NumberOfDependents)){
+  if(is.na(cs_test$NumberOfDependents[i])){
+    cs_test$NumberOfDependents[i] = median.numdep
+  }
+}
+
+train1 <- cs_test
+train1 <- train1 %>% drop_na()
+train.y <- train1$MonthlyIncome
+train1 <- subset(train1, select = -c(MonthlyIncome))
+
+
+fit <- lm(train.y ~., data=train1)
+pred.miss <- fit$coefficients[1] + fit$coefficients[2]*cs_test$RevolvingUtilizationOfUnsecuredLines + fit$coefficients[3]*cs_test$age +
+              fit$coefficients[4]*cs_test$`NumberOfTime30-59DaysPastDueNotWorse` + fit$coefficients[5]*cs_test$DebtRatio +
+              fit$coefficients[6]*cs_test$NumberOfOpenCreditLinesAndLoans + fit$coefficients[7]*cs_test$NumberOfTimes90DaysLate +
+              fit$coefficients[8]*cs_test$NumberOfOpenCreditLinesAndLoans + fit$coefficients[9]*cs_test$`NumberOfTime60-89DaysPastDueNotWorse` +
+              fit$coefficients[10]*cs_test$NumberOfDependents
+for(i in 1:length(cs_test$MonthlyIncome)){
+  if(is.na(cs_test$MonthlyIncome[i])){
+    cs_test$MonthlyIncome[i] = pred.miss[i]
+  }
+}
+
+# Winsorization
+cs_test_winsorized <- sapply(cs_test, Winsorize, minval = NULL)
+cs_test_winsorized <- as.data.frame(cs_test_winsorized)
+
+# Feature Engineering 
+cs_test_winsorized <- cs_test_winsorized %>%
+  mutate(Distributedincome = MonthlyIncome/(1+NumberOfDependents),
+         Totalcost = DebtRatio * MonthlyIncome,
+         Retired = ifelse(age > 65, 1, 0),
+         Lateindex = `NumberOfTime30-59DaysPastDueNotWorse` + 2*`NumberOfTime60-89DaysPastDueNotWorse` + 3*NumberOfTimes90DaysLate,
+         Numedepencubed = NumberOfDependents^3,
+         LogRUUL = log(RevolvingUtilizationOfUnsecuredLines+1),
+         LogMI = log(MonthlyIncome+1),
+         LoansAge = (NumberOfOpenCreditLinesAndLoans + NumberRealEstateLoansOrLines)/age,
+         DepAge = NumberOfDependents/age,
+         LoansIncome = NumberOfOpenCreditLinesAndLoans + NumberRealEstateLoansOrLines,
+         RUULIncome = log((RevolvingUtilizationOfUnsecuredLines+1)/(MonthlyIncome+1)), #Housing Insolvency paper
+         HousingExpenses = log((1+NumberRealEstateLoansOrLines)/(MonthlyIncome+1)),
+         AgeCubed = age^3,
+         LogAge = log(age)
+)
+
+```
+
+## Section 7: Predictive Algorithm
 
 ```{r}
 
 output.forest<- randomForest(as.factor(cs_training_clean$SeriousDlqin2yrs) ~ cs_training_clean$RevolvingUtilizationOfUnsecuredLines+ cs_training_clean$age+ cs_training_clean$`NumberOfTime30-59DaysPastDueNotWorse`+ cs_training_clean$DebtRatio + cs_training_clean$MonthlyIncome + cs_training_clean$NumberOfOpenCreditLinesAndLoans + cs_training_clean$NumberOfTimes90DaysLate + cs_training_clean$NumberRealEstateLoansOrLines + cs_training_clean$`NumberOfTime60-89DaysPastDueNotWorse` + cs_training_clean$NumberOfDependents + cs_training_clean$Distributedincome + cs_training_clean$Totalcost + cs_training_clean$Retired + cs_training_clean$Lateindex + cs_training_clean$Numedepencubed + cs_training_clean$LogRUUL + cs_training_clean$LogMI + cs_training_clean$LoansAge +cs_training_clean$DepAge + cs_training_clean$LoansIncome + cs_training_clean$RUULIncome + cs_training_clean$HousingExpenses + cs_training_clean$AgeCubed + cs_training_clean$LogAge , 
-                             data=cs_training_clean, ntree=100, importance=T, replace=T)
+                             data=cs_training_clean, ntree=100, importance=T, replace=T, xtest = cs_test_winsorized)
+
+y.test <- output.forest$test
+```
 
 
-pred <- predict(output.forest, cs_training_clean, type = "prob")
+##  AUC for test
+```{r}
+pred <- predict(output.forest, cs_test_winsorized, type = "prob")
 library(pROC)
 roc_obj <- roc(cs_training_clean$SeriousDlqin2yrs, pred[,2])
 auc(roc_obj)
+```
+
+
+## Section 8: Output file
+```{r}
+submissions <- output.forest$test$votes[,2]
+submissions <- as.data.frame(submission)
+id <- seq(1,nrow(submission), by = 1)
+submissions <- cbind(id, submissions)
+colnames(submissions) <- c("id", "Probability")
+write.csv(submissions, "submissions.csv")
 ```
