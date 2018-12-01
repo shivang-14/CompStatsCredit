@@ -1,36 +1,62 @@
 ---
 title: "Comp Stats | Give Me Some Credit"
 author: "Lathan Liou, Shivang Mehta, Isaac Cui, Abby Lewis"
-date: "11/21/2018"
+date: "11/30/2018"
 output: pdf_document
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+```{r setup, include=FALSE message = FALSE}
+## Section 0: Environment Setup
 
+knitr::opts_chunk$set(echo = TRUE)
 #### Libraries ####
 library(readxl)
 library(tidyr)
 library(VIM)
 library(readr)
 library(dplyr)
-library(skimr)
 library(glmnet)
-cs_training <- read_csv("~/Desktop/Senior Year/CompStats/Chandler/DataProject/cs-training.csv")
+library(ggplot2)
+library(mice)
+library(scales)
+
+cs_training <- read_csv("C:/Users/Shivang Mehta/Desktop/Work/Fall 18/Computational Statistics/Project/Data/cs-training.xlsx")
 
 #### Data Preparation ####
 #remove first column
 cs_training <- cs_training[,-1]
 
 #making all columns numeric
-cs_training <- sapply(cs_training, as.numeric)
-
 cs_training <- as.data.frame(cs_training)
 ```
+\par 
+Banks play a crucial role in market economies. They decide who can get finance and on what terms and can make or break investment decisions. For markets and society to function, individuals and companies need access to credit. 
+\par 
+Credit scoring algorithms, which make a guess at the probability of default, are the method banks use to determine whether or not a loan should be granted. Through this project, we attempt to improve on the state of the art in credit scoring, by predicting the probability that somebody will experience financial distress in the next two years.
+\par 
+We begin by exploring the data provided to us:
+\par 
+```{r}
+## Section 1: Data Exploration
 
-## Section 1: Data Imputation 
+# Dependent variable 
+ggplot(cs_training, aes(SeriousDlqin2yrs)) + geom_bar(aes(y= (..count..)/sum(..count..)), fill = "steelblue", color ="steelblue") + ylab("Percent")
+
+# Independent Variables
+
+
+
+
+
+
+```
+
+
+
 
 ```{r}
+## Section 2: Data Imputation
+
 #EDA
 md.pattern(cs_training)
 aggr_plot <- aggr(cs_training, col=c('dodgerblue','black'), numbers=TRUE, sortVars=TRUE, labels=names(cs_training), cex.axis=.4, gap=0.5, ylab=c("Histogram of missing data","Pattern"))
@@ -67,7 +93,6 @@ pred.miss <- fit$coefficients[1] + fit$coefficients[2]*cs_training$RevolvingUtil
               fit$coefficients[6]*cs_training$NumberOfOpenCreditLinesAndLoans + fit$coefficients[7]*cs_training$NumberOfTimes90DaysLate +
               fit$coefficients[8]*cs_training$NumberOfOpenCreditLinesAndLoans + fit$coefficients[9]*cs_training$`NumberOfTime60-89DaysPastDueNotWorse` +
               fit$coefficients[10]*cs_training$NumberOfDependents
-
 for(i in 1:length(cs_training$MonthlyIncome)){
   if(is.na(cs_training$MonthlyIncome[i])){
     cs_training$MonthlyIncome[i] = pred.miss[i]
@@ -75,46 +100,112 @@ for(i in 1:length(cs_training$MonthlyIncome)){
 }
 ```
 
+## Section 3: Outlier Treatment
+We decided to take the outliers and replace them with the median. We chose not to remove the outliers because we didn't want to lose information. Although we are reducing the variance, we hope to remove influential points that could be skewing our data.
+
+```{r}
+#compute medians
+medians <- sapply(cs_training, median)
+quantiles <- sapply(cs_training, quantile, probs = 0.95)
+#median replacement
+for(i in 1:length(cs_training$SeriousDlqin2yrs)){
+  
+  if(cs_training$RevolvingUtilizationOfUnsecuredLines[i] > quantiles[2]){
+    
+  cs_training$RevolvingUtilizationOfUnsecuredLines[i] <- medians[2]
+  }
+if(cs_training$age[i] > quantiles[3] | cs_training$age[i] == 0 ){
+    
+  cs_training$age[i] <- medians[3]
+}
+  if(cs_training$`NumberOfTime30-59DaysPastDueNotWorse`[i] == 96 | cs_training$`NumberOfTime30-59DaysPastDueNotWorse`[i] == 98){
+    
+  cs_training$`NumberOfTime30-59DaysPastDueNotWorse`[i] <- medians[4]
+  }
+  
+  if(cs_training$DebtRatio[i] > quantiles[5]) {
+    
+  cs_training$DebtRatio[i] <- medians[5]
+  }
+  
+  if(cs_training$MonthlyIncome[i] > quantiles[6]){
+    
+  cs_training$MonthlyIncome[i] <- medians[6]
+  }
+  
+  if(cs_training$NumberOfOpenCreditLinesAndLoans[i] > quantiles[7]){
+    
+    cs_training$NumberOfOpenCreditLinesAndLoans[i] <- medians[7]
+  }
+  
+  if(cs_training$NumberOfTimes90DaysLate[i] == 96 | cs_training$NumberOfTimes90DaysLate[i] == 98){
+    
+  cs_training$NumberOfTimes90DaysLate[i] <- medians[8]
+  }
+  
+  if(cs_training$NumberRealEstateLoansOrLines[i] > quantiles[9]){
+    
+    cs_training$NumberRealEstateLoansOrLines[i] <- medians[9]
+  }
+  
+   if(cs_training$`NumberOfTime60-89DaysPastDueNotWorse`[i] == 96 | cs_training$`NumberOfTime60-89DaysPastDueNotWorse`[i] == 98){
+    
+  cs_training$`NumberOfTime60-89DaysPastDueNotWorse`[i] <- medians[10]
+   }
+  
+   if(cs_training$NumberOfDependents[i] > quantiles[11]){
+    
+    cs_training$NumberOfDependents[i] <- medians[11]
+  }
+}
+# replacing negative monthly income with zero
+cs_training$MonthlyIncome <- ifelse(cs_training$MonthlyIncome < 0, 0, cs_training$MonthlyIncome)
+```
+
+```{r, include=FALSE}
+write_csv(cs_training, "cs_training_clean.csv")
+```
 Maybe write a brief description of what the code did.
 
-## Section 2: Feature Engineering
+## Section 4: Feature Engineering
 
 In class, we learned how adding basis functions could improve the way we understand our data: namely finding our decision rules in higher dimensions. Thus, feature engineering is a crucial part of the machine learning process. By transforming our data into features that we think better represent the underlying problem for our machine learning models, we hope to improve predictive performance. We tried to use our domain knowledge about credit scores and our creativity to come up with new features. We ultimately came up with 14 new features in addition to the existing 10 explanatory ones in the data set. 
 
 ```{r}
-#### remove data that doesn't make sense ####
-
-# age of 0 doesn't make sense
-cs_training <- cs_training %>%
-  filter(age != 0)
-
-# negative monthly income? maybe that's a typo 
-cs_training$MonthlyIncome <- abs(cs_training$MonthlyIncome)
-
+cs_training_clean <- read_csv("cs_training_clean.csv")
 #add features
-cs_training <- cs_training %>%
-  mutate(Distributedincome = MonthlyIncome/(1+NumberOfDependents)-1,
+cs_training_clean <- cs_training_clean %>%
+  mutate(Distributedincome = MonthlyIncome/(1+NumberOfDependents),
          Totalcost = DebtRatio * MonthlyIncome,
          Retired = ifelse(age > 65, 1, 0),
          Lateindex = `NumberOfTime30-59DaysPastDueNotWorse` + 2*`NumberOfTime60-89DaysPastDueNotWorse` + 3*NumberOfTimes90DaysLate,
          Numedepencubed = NumberOfDependents^3,
-         LogRUUL = ifelse(RevolvingUtilizationOfUnsecuredLines == 0, 0, log(RevolvingUtilizationOfUnsecuredLines)),
-         LogMI = ifelse(MonthlyIncome == 0, 0, log(MonthlyIncome)),
+         LogRUUL = log(RevolvingUtilizationOfUnsecuredLines+1),
+         LogMI = log(MonthlyIncome+1),
          LoansAge = (NumberOfOpenCreditLinesAndLoans + NumberRealEstateLoansOrLines)/age,
          DepAge = NumberOfDependents/age,
-         LoansIncome = NumberOfOpenCreditLinesAndLoans + NumberRealEstateLoansOrLines
+         LoansIncome = NumberOfOpenCreditLinesAndLoans + NumberRealEstateLoansOrLines,
+         RUULIncome = log((RevolvingUtilizationOfUnsecuredLines+1)/(MonthlyIncome+1)), #Housing Insolvency paper
+         HousingExpenses = log((1+NumberRealEstateLoansOrLines)/(MonthlyIncome+1)),
+         AgeCubed = age^3,
+         LogAge = log(age)
 )
 ```
 
 ```{r}
-#save dataset
-write_csv(cs_training, "cs_training_final.csv")
+#Test features
+cs_zero <- cs_training_clean[cs_training_clean$SeriousDlqin2yrs == 0,]
+cs_one <- cs_training_clean[cs_training_clean$SeriousDlqin2yrs == 1,]
+hist(log(cs_zero$RevolvingUtilizationOfUnsecuredLines/(cs_zero$MonthlyIncome)), freq=FALSE)
+hist(log(cs_zero$RevolvingUtilizationOfUnsecuredLines/(cs_zero$MonthlyIncome)), freq=FALSE)
+summary(cs_training_clean$HousingExpenses)
+ggplot(cs_training_clean, aes(LogAge, fill = as.factor(SeriousDlqin2yrs))) + geom_density(alpha = 0.2)
 ```
 
-## Section 3: Feature Selection
+## Section 5: Feature Selection
 
 ```{r}
-xmat <- as.matrix(cs_training[,-1])
-lassovar <- glmnet(xmat, y=as.factor(cs_training$SeriousDlqin2yrs), alpha=1, family="binomial")
-coef(lassovar)[, 10]
+xmat <- as.matrix(cs_training_clean[,-1])
+lassovar <- cv.glmnet(xmat, y=as.factor(cs_training_clean$SeriousDlqin2yrs), alpha = 0.5, lambda = seq(0.00051,0.00058,length.out=7),family="binomial")
+
 ```
