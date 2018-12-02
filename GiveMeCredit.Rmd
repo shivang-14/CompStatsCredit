@@ -22,11 +22,12 @@ library(scales)
 library(DescTools)
 library(randomForest)
 library(pROC)
+library(data.table)
+library(xgboost)
 
 
 cs_training <- read_csv("C:/Users/Shivang Mehta/Desktop/Work/Fall 18/Computational Statistics/Project/Data/cs-training.xlsx")
 
-#### Data Preparation ####
 #remove first column
 cs_training <- cs_training[,-1]
 
@@ -110,8 +111,6 @@ for(i in 1:length(cs_training$MonthlyIncome)){
   }
 }
 
-
-## Random forests 
 ```
 
 ## Section 3: Outlier Treatment
@@ -123,10 +122,6 @@ SHORT NOTE ON WINSORIZATION
 cs_training_winsorized <- sapply(cs_training, Winsorize, minval = NULL)
 cs_training_winsorized <- as.data.frame(cs_training_winsorized)
 ```
-
-```{r, include=FALSE}
-write_csv(cs_training_winsorized, "cs_training_clean.csv")
-```
 Maybe write a brief description of what the code did.
 
 ## Section 4: Feature Engineering
@@ -134,9 +129,8 @@ Maybe write a brief description of what the code did.
 In class, we learned how adding basis functions could improve the way we understand our data: namely finding our decision rules in higher dimensions. Thus, feature engineering is a crucial part of the machine learning process. By transforming our data into features that we think better represent the underlying problem for our machine learning models, we hope to improve predictive performance. We tried to use our domain knowledge about credit scores and our creativity to come up with new features. We ultimately came up with 14 new features in addition to the existing 10 explanatory ones in the data set. 
 
 ```{r}
-cs_training_clean <- read_csv("cs_training_clean.csv")
 #add features
-cs_training_clean <- cs_training_clean %>%
+cs_training_winsorized <- cs_training_winsorized %>%
   mutate(Distributedincome = MonthlyIncome/(1+NumberOfDependents),
          Totalcost = DebtRatio * MonthlyIncome,
          Retired = ifelse(age > 65, 1, 0),
@@ -152,6 +146,11 @@ cs_training_clean <- cs_training_clean %>%
          AgeCubed = age^3,
          LogAge = log(age)
 )
+
+write_csv(cs_training_winsorized, "cs_training_clean.csv")
+cs_training_clean <- read_csv("cs_training_clean.csv")
+
+
 ```
 
 ```{r}
@@ -170,6 +169,7 @@ ggplot(cs_training_clean, aes(LogAge, fill = as.factor(SeriousDlqin2yrs))) + geo
 
 ```{r}
 
+cs_test <- cs_test[,-1]
 cs_test <- cs_test[,-1]
 
 # Imputation
@@ -220,11 +220,17 @@ cs_test_winsorized <- cs_test_winsorized %>%
          LogAge = log(age)
 )
 
+write_csv(cs_test_winsorized, "cs_test_clean.csv")
+
 ```
 
 ## Section 7: Predictive Algorithm
 
 ```{r}
+cs_test_clean <- read_csv("cs_test_clean.csv")
+cs_training_clean <- read_csv("cs_training_clean.csv")
+
+## Random Forest
 
 output.forest<- randomForest(as.factor(cs_training_clean$SeriousDlqin2yrs) ~ cs_training_clean$RevolvingUtilizationOfUnsecuredLines+ cs_training_clean$age+ cs_training_clean$`NumberOfTime30-59DaysPastDueNotWorse`+ cs_training_clean$DebtRatio + cs_training_clean$MonthlyIncome + cs_training_clean$NumberOfOpenCreditLinesAndLoans + cs_training_clean$NumberOfTimes90DaysLate + cs_training_clean$NumberRealEstateLoansOrLines + cs_training_clean$`NumberOfTime60-89DaysPastDueNotWorse` + cs_training_clean$NumberOfDependents + cs_training_clean$Distributedincome + cs_training_clean$Totalcost + cs_training_clean$Retired + cs_training_clean$Lateindex + cs_training_clean$Numedepencubed + cs_training_clean$LogRUUL + cs_training_clean$LogMI + cs_training_clean$LoansAge +cs_training_clean$DepAge + cs_training_clean$LoansIncome + cs_training_clean$RUULIncome + cs_training_clean$HousingExpenses + cs_training_clean$AgeCubed + cs_training_clean$LogAge , 
                              data=cs_training_clean, ntree=100, importance=T, replace=T, xtest = cs_test_winsorized)
@@ -232,15 +238,28 @@ output.forest<- randomForest(as.factor(cs_training_clean$SeriousDlqin2yrs) ~ cs_
 y.test <- output.forest$test
 ```
 
-
-##  AUC for test
 ```{r}
-pred <- predict(output.forest, cs_test_winsorized, type = "prob")
-library(pROC)
-roc_obj <- roc(cs_training_clean$SeriousDlqin2yrs, pred[,2])
-auc(roc_obj)
-```
+#### xgboost ####
 
+#convert data frame to matrix
+cs_xgboost <- cs_training_clean[,-1]
+cs_xgboost <- as.matrix(cs_xgboost)
+
+cs_test_clean <- as.matrix(cs_test_clean)
+
+creditboost <- xgboost(data = cs_xgboost, max.depth = 5, label = as.matrix(cs_training_clean[,1]),
+               eta = 0.1, nthread = 2, nround = 2, objective = "binary:logistic")
+
+pred <- predict(creditboost, cs_test_clean)
+
+submission.xgboost <- pred
+submission.xgboost <- as.data.frame(submission.xgboost)
+id <- seq(1,nrow(submission.xgboost), by = 1)
+submission.xgboost <- cbind(as.integer(id), submission.xgboost)
+colnames(submission.xgboost) <- c("id", "Probability")
+write.csv(submission.xgboost, "submission.xgboost.csv")
+
+```
 
 ## Section 8: Output file
 ```{r}
@@ -250,4 +269,69 @@ id <- seq(1,nrow(submission), by = 1)
 submissions <- cbind(id, submissions)
 colnames(submissions) <- c("id", "Probability")
 write.csv(submissions, "submissions.csv")
+```
+
+## Section 9: Trying xgboost's imputation method
+```{r}
+#prepare training data
+cs_training_a <- sapply(cs_training, Winsorize, minval = NULL, na.rm = TRUE)
+cs_training_a <- as.data.frame(cs_training_a)
+
+# Feature Engineering 
+cs_training_a <- cs_training_a %>%
+  mutate(Distributedincome = MonthlyIncome/(1+NumberOfDependents),
+         Totalcost = DebtRatio * MonthlyIncome,
+         Retired = ifelse(age > 65, 1, 0),
+         Lateindex = `NumberOfTime30-59DaysPastDueNotWorse` + 2*`NumberOfTime60-89DaysPastDueNotWorse` + 3*NumberOfTimes90DaysLate,
+         Numedepencubed = NumberOfDependents^3,
+         LogRUUL = log(RevolvingUtilizationOfUnsecuredLines+1),
+         LogMI = log(MonthlyIncome+1),
+         LoansAge = (NumberOfOpenCreditLinesAndLoans + NumberRealEstateLoansOrLines)/age,
+         DepAge = NumberOfDependents/age,
+         LoansIncome = NumberOfOpenCreditLinesAndLoans + NumberRealEstateLoansOrLines,
+         RUULIncome = log((RevolvingUtilizationOfUnsecuredLines+1)/(MonthlyIncome+1)), #Housing Insolvency paper
+         HousingExpenses = log((1+NumberRealEstateLoansOrLines)/(MonthlyIncome+1)),
+         AgeCubed = age^3,
+         LogAge = log(age)
+)
+
+cs_xgboost_a <- cs_training_a[,-c(1:2)]
+cs_xgboost_a <- as.matrix(cs_xgboost_a)
+
+creditboost <- xgboost(data = cs_xgboost_a, max.depth = 5, label = cs_xgboost_a[,1],
+               eta = 1, nthread = 2, nround = 2, objective = "binary:logistic", missing = NA)
+
+#prepare test data
+cs_test_a <- sapply(cs_test, Winsorize, minval = NULL, na.rm = TRUE)
+cs_test_a <- as.data.frame(cs_test_a)
+
+# Feature Engineering 
+cs_test_a <- cs_test_a %>%
+  mutate(Distributedincome = MonthlyIncome/(1+NumberOfDependents),
+         Totalcost = DebtRatio * MonthlyIncome,
+         Retired = ifelse(age > 65, 1, 0),
+         Lateindex = `NumberOfTime30-59DaysPastDueNotWorse` + 2*`NumberOfTime60-89DaysPastDueNotWorse` + 3*NumberOfTimes90DaysLate,
+         Numedepencubed = NumberOfDependents^3,
+         LogRUUL = log(RevolvingUtilizationOfUnsecuredLines+1),
+         LogMI = log(MonthlyIncome+1),
+         LoansAge = (NumberOfOpenCreditLinesAndLoans + NumberRealEstateLoansOrLines)/age,
+         DepAge = NumberOfDependents/age,
+         LoansIncome = NumberOfOpenCreditLinesAndLoans + NumberRealEstateLoansOrLines,
+         RUULIncome = log((RevolvingUtilizationOfUnsecuredLines+1)/(MonthlyIncome+1)), #Housing Insolvency paper
+         HousingExpenses = log((1+NumberRealEstateLoansOrLines)/(MonthlyIncome+1)),
+         AgeCubed = age^3,
+         LogAge = log(age)
+)
+
+cs_test_a <- cs_test_a[,-c(1:2)]
+cs_test_a <- as.matrix(cs_test_a)
+
+pred <- predict(creditboost, cs_test_a)
+
+submission.xgboost <- pred
+submission.xgboost <- as.data.frame(submission.xgboost)
+id <- seq(1,nrow(submission.xgboost), by = 1)
+submission.xgboost <- cbind(as.integer(id), submission.xgboost)
+colnames(submission.xgboost) <- c("id", "Probability")
+write.csv(submission.xgboost, "submission.xgboost2.csv")
 ```
